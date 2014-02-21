@@ -1,0 +1,22 @@
+This project applies machine learning algorithms to college admissions.  Proposed schedule for feature implementation:
+
+Milestone #1:
+- implement artificial neural network and decision tree algorithms
+- include support for training and testing
+- process data to be used by the algorithms
+
+Milestone #2:
+- implement 2-3 additional ML algorithms (naive bayes,...)
+- add approparite data processing options
+- ensure that training results can be saved for all algorithms
+- write separate files to train and test all algorithms
+
+Milestone #3:
+- make adjustments to each algorithm to gauge their highest level of performance
+- select one (most promising) algorithm and explore further improvements
+- talk to admissions office for ideas on other features that would improve product usefulness (e.g. number of students to accept as a parameter, provide estimated accuracy of prediction)
+
+Milestone #4
+- finish improvements to selected algorithm
+- implement additional features for admissions office as determined prior to Milestone #3
+- build interface to allow use by admissions staff
