@@ -1,8 +1,13 @@
 class PrepareData
 
+  # the types of classifiers to prepare data for
+  Classifiers = [:tree, :ann]
+  # the path to the training data folder
   Training_Data_Folder = "training_data"
+  # the path to the test data folder
   Test_Data_Folder = "test_data"
 
+  # indices of attributes from the starting data file that should not appear in the prepared data
   Reject_Indices = [18,19,20,21]
 
   # ID3 specific values
@@ -15,6 +20,7 @@ class PrepareData
   Continuous_Denominators = [0,0,0,100000,0,0,0,0,0,0,0,0,5,4,2100,36,1600,-1,100,100,0,0,-1,0] # the number to divide each continuous attribute by to produce values <= 1 (0 => discrete attribute)
   ANN_Class_Values = {"no_admit" => "1 0 0", "admit_no_matriculate" => "0 1 0", "admit_matriculate" => "0 0 1"}
 
+  # initialized with a csv file containing data instances for training/testing
   def initialize(data_file)
     @training_data = []
     @test_data = []
@@ -37,6 +43,7 @@ class PrepareData
     @training_data.first.first.size.times {@discrete_options_to_numbers << {}}
   end
 
+  # create data files specific to one of the classifiers for both training and testing
   def prepare_data(algorithm)
     case algorithm
     when :id3
@@ -44,11 +51,16 @@ class PrepareData
     when :ann
       prepare_ann_data
     when :all
-      [:id3, :ann].each {|algorithm| prepare_data(algorithm)}
+      prepare_all_data
     end
   end
 
   private
+
+  def prepare_all_data
+    prepare_id3_data
+    prepare_ann_data
+  end
 
   def prepare_id3_data
     write_id3_file("#{Training_Data_Folder}/id3_training_data.txt", @training_data)
