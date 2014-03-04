@@ -38,16 +38,83 @@ class NaiveBayes
     [:admit_status, :discrete],
   ]
 
-  def initialize(params = {})
+  def initialize (params = {})
     @pvs = {}
     @cvs = {no_admit: {_TOTAL: 0.0}, admit_no_matriculate: {_TOTAL: 0.0}, admit_matriculate: {_TOTAL: 0.0}, _TOTAL: 0.0}
-    instance0 = nil
     if file = params[:training_file_name]
-       # counts[attr name][attr value][class] = count
-      data = CSV.read(file)
-      key = data.shift
-      for instance in data
-        learn instance
+      @training_data = CSV.read(file)
+      key = @training_data.shift
+    elsif file = params[:config_file_name]
+      config_data = CSV.read(file)
+      for row in config_data
+        cv = row[0].to_sym
+        pn = row[1].to_sym
+        pv = row[2]
+        value = row[3].to_f
+        if cv == :_TOTAL
+          if pn == :_TOTAL
+            @cvs[:_TOTAL] = value
+          else
+            @pvs[pn] = {} if @pvs[pn].nil?
+            if pv == '_TOTAL'
+              @pvs[pn][:_TOTAL] = value
+            else
+              @pvs[pn][pv] = value
+            end
+          end
+        else
+          if pn == :_TOTAL
+            @cvs[cv][:_TOTAL] = value
+          else
+            @cvs[cv][pn] = {} if @cvs[cv][pn].nil?
+            if pv == '_TOTAL'
+              @cvs[cv][pn][:_TOTAL] = value
+            else
+              @cvs[cv][pn][pv] = value
+            end
+          end
+        end
+      end
+    end
+  end
+
+  def train
+    for instance in @training_data
+      learn instance
+    end
+  end
+
+  def train_and_save (config_file_name)
+    train
+    CSV.open(config_file_name, "w") do |csv|
+      for cv in @cvs.keys
+        if cv == :_TOTAL
+          csv << ['_TOTAL', '_TOTAL', '_TOTAL', @cvs[cv]]
+        else
+          csv << [cv.to_s, '_TOTAL', '_TOTAL', @cvs[cv][:_TOTAL]]
+          Params.each_index do |i|
+            next unless Params[i][1] == :discrete
+            pn = Params[i][0]
+            for pv in @cvs[cv][pn].keys
+              if pv == :_TOTAL
+                csv << [cv.to_s, pn.to_s, '_TOTAL', @cvs[cv][pn][pv]]
+              else
+                csv << [cv.to_s, pn.to_s, pv, @cvs[cv][pn][pv]]
+              end
+            end
+          end
+        end
+      end
+      Params.each_index do |i|
+        next unless Params[i][1] == :discrete
+        pn = Params[i][0]
+        for pv in @pvs[pn].keys
+          if pv == :_TOTAL
+            csv << ['_TOTAL', pn.to_s, '_TOTAL', @pvs[pn][pv]]
+          else
+            csv << ['_TOTAL', pn.to_s, pv, @pvs[pn][pv]]
+          end
+        end
       end
     end
   end
@@ -91,40 +158,21 @@ class NaiveBayes
     return ret
   end
 
-  def print
-    for cv in @cvs.keys
-      if cv == :_TOTAL
-        puts "@cvs[:_TOTAL] = #{@cvs[cv]}"
-      else
-        puts "@cvs[:#{cv}][:_TOTAL] = #{@cvs[cv][:_TOTAL]}"
-        for p in Params
-          next unless p[1] == :discrete
-          pn = p[0]
-          for pv in @cvs[cv][pn].keys
-            if pv == :_TOTAL
-              puts "@cvs[:#{cv}][:#{pn}][:_TOTAL] = #{@cvs[cv][pn][:_TOTAL]}"
-            else
-              puts "@cvs[:#{cv}][:#{pn}][\"#{pv}\"] = #{@cvs[cv][pn][pv]}"
-            end
-          end
-        end
+  def predict (instance)
+    probs = probabilities instance
+    max_cv = nil
+    max_prob = 0.0
+    for cv in probs.keys
+      if probs[cv] > max_prob
+        max_prob = probs[cv]
+        max_cv = cv
       end
     end
-    for p in Params
-      next unless p[1] == :discrete
-      pn = p[0]
-      for pv in @pvs[pn].keys
-        if pv == :_TOTAL
-          puts "@pvs[:#{pn}][:_TOTAL] = #{@pvs[pn][:_TOTAL]}"
-        else
-          puts "@pvs[:#{pn}][\"#{pv}\"] = #{@pvs[pn][pv]}"
-        end
-      end
-    end
+    return max_cv
   end
 
 end
 
 if __FILE__ == $0
-  NaiveBayes.new(training_file_name: 'admissions_data.csv').print
+  NaiveBayes.new(training_file_name: 'admissions_data.csv').train_and_save('nb_config.csv')
 end
