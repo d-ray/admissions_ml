@@ -268,6 +268,7 @@ class NaiveBayes
         if Params[i][1] == :continuous
           pv = Params[i][2].call(pv)
         end
+         # TODO: this seems to cause a lot of floating-point inaccuracy.
         @cvs[cv][pn][pv] = 0.0 if @cvs[cv][pn][pv].nil?
         prob *= @cvs[cv][pn][pv] / @cvs[cv][pn][:_TOTAL]
         @pvs[pn][pv] = 0.0 if @pvs[pn][pv].nil?
