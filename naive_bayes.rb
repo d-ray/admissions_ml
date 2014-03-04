@@ -40,14 +40,15 @@ class NaiveBayes
 
   def learn (instance)
     class_val = instance[19].nil? ? :no_admit : instance[20].nil? ? :admit_no_matriculate : :admit_matriculate
-    if @class_counts[class_val].nil? then @class_counts[class_val] = 0 end
     @class_counts[class_val] += 1
     Params.each_index do |i|
       if Params[i][1] == :discrete
         p = Params[i][0]
-        if @counts[p].nil? then @counts[p] = {} end
-        if @counts[p][instance[i]].nil? then @counts[p][instance[i]] = {} end
-        if @counts[p][instance[i]][class_val].nil? then @counts[p][instance[i]][class_val] = 0 end
+        @counts[p] = {} if @counts[p].nil?
+        @counts[p][:_TOTAL] += 1
+        @counts[p][instance[i]] = {} if @counts[p][instance[i]].nil?
+        @counts[p][instance[i]][:_TOTAL] += 1
+        @counts[p][instance[i]][class_val] = 0 if @counts[p][instance[i]][class_val].nil?
         @counts[p][instance[i]][class_val] += 1
       end
     end
@@ -61,9 +62,9 @@ class NaiveBayes
       Params.each_index do |i|
         if Params[i][1] == :discrete
           p = Params[i][0]
-          if @counts[p].nil? then @counts[p] = {} end
-          if @counts[p][instance[i]].nil? then @counts[p][instance[i]] = {} end
-          if @counts[p][instance[i]][cv].nil? then @counts[p][instance[i]][cv] = 0 end
+          @counts[p] = {} if @counts[p].nil?
+          @counts[p][instance[i]] = {} if @counts[p][instance[i]].nil?
+          @counts[p][instance[i]][cv] = 0 if @counts[p][instance[i]][cv].nil?
           cvs_total = 0
           for ocv in @counts[p][instance[i]].keys
             cvs_total += @counts[p][instance[i]][ocv]
@@ -89,7 +90,7 @@ class NaiveBayes
 
   def initialize(params = {})
     @counts = {}
-    @class_counts = {}
+    @class_counts = {no_admit: 0, admit_no_matriculate: 0, admit_matriculate: 0}
     if file = params[:training_file_name]
        # counts[attr name][attr value][class] = count
       data = CSV.read(file)
@@ -107,7 +108,7 @@ class NaiveBayes
       for v in @counts[p].keys
         unless @counts[p][v].nil?
           for c in [:no_admit, :admit_no_matriculate, :admit_matriculate]
-            if @counts[p][v][c].nil? then @counts[p][v][c] = 0 end
+            @counts[p][v][c] = 0 if @counts[p][v][c].nil?
             puts "counts[#{p}][#{v}][#{c}] = #{@counts[p][v][c]}"
           end
         end
