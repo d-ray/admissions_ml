@@ -38,47 +38,10 @@ class NaiveBayes
     [:admit_status, :discrete],
   ]
 
-  def default_class_counts
-    return {no_admit: 0, admit_no_matriculate: 0, admit_matriculate: 0, _TOTAL: 0}
-  end
-
-  def learn (instance)
-    class_val = instance[19].nil? ? :no_admit : instance[20].nil? ? :admit_no_matriculate : :admit_matriculate
-    @class_counts[:_TOTAL] += 1
-    @class_counts[class_val] += 1
-    Params.each_index do |i|
-      if Params[i][1] == :discrete
-        p = Params[i][0]
-        @counts[p] = {_TOTAL: 0} if @counts[p].nil?
-        @counts[p][:_TOTAL] += 1
-        @counts[p][instance[i]] = default_class_counts if @counts[p][instance[i]].nil?
-        @counts[p][instance[i]][:_TOTAL] += 1
-        @counts[p][instance[i]][class_val] += 1
-      end
-    end
-  end
-
-  def predict (instance)
-    ret = {}
-    for cv in @class_counts.keys
-      prob = @class_counts[cv]
-      Params.each_index do |i|
-        if Params[i][1] == :discrete
-          p = Params[i][0]
-          @counts[p] = {_TOTAL: 0} if @counts[p].nil?
-          @counts[p][instance[i]] = default_class_counts if @counts[p][instance[i]].nil?
-          prob *= @counts[p][instance[i]][cv] / @counts[p][instance[i]][:_TOTAL]
-          prob /= @counts[p][instance[i]][:_TOTAL] / @counts[p][:_TOTAL]
-        end
-      end
-      ret[cv] = prob
-    end
-    return ret
-  end
-
   def initialize(params = {})
-    @counts = {}
-    @class_counts = default_class_counts
+    @pvs = {}
+    @cvs = {no_admit: {_TOTAL: 0.0}, admit_no_matriculate: {_TOTAL: 0.0}, admit_matriculate: {_TOTAL: 0.0}, _TOTAL: 0.0}
+    instance0 = nil
     if file = params[:training_file_name]
        # counts[attr name][attr value][class] = count
       data = CSV.read(file)
@@ -89,15 +52,72 @@ class NaiveBayes
     end
   end
 
+  def learn (instance)
+    cv = instance[19].nil? ? :no_admit : instance[20].nil? ? :admit_no_matriculate : :admit_matriculate
+    @cvs[:_TOTAL] += 1.0
+    @cvs[cv][:_TOTAL] += 1.0
+    Params.each_index do |i|
+      next unless Params[i][1] == :discrete
+      pn = Params[i][0]
+      pv = instance[i]
+      @cvs[cv][pn] = {_TOTAL: 0.0} if @cvs[cv][pn].nil?
+      @cvs[cv][pn][:_TOTAL] += 1.0
+      @cvs[cv][pn][pv] = 0.0 if @cvs[cv][pn][pv].nil?
+      @cvs[cv][pn][pv] += 1.0
+      @pvs[pn] = {_TOTAL: 0.0} if @pvs[pn].nil?
+      @pvs[pn][:_TOTAL] += 1.0
+      @pvs[pn][pv] = 0.0 if @pvs[pn][pv].nil?
+      @pvs[pn][pv] += 1.0
+    end
+  end
+
+  def probabilities (instance)
+    ret = {}
+     # P(C|F...) = P(C)P(F...|C)/P(F...)
+    for cv in @cvs.keys
+      next if cv == :_TOTAL
+      prob = @cvs[cv][:_TOTAL] / @cvs[:_TOTAL]
+      Params.each_index do |i|
+        next unless Params[i][1] == :discrete
+        pn = Params[i][0]
+        pv = instance[i]
+        @cvs[cv][pn][pv] = 0.0 if @cvs[cv][pn][pv].nil?
+        prob *= @cvs[cv][pn][pv] / @cvs[cv][pn][:_TOTAL]
+        @pvs[pn][pv] = 0.0 if @pvs[pn][pv].nil?
+        prob /= @pvs[pn][pv] / @pvs[pn][:_TOTAL]
+      end
+      ret[cv] = prob
+    end
+    return ret
+  end
+
   def print
+    for cv in @cvs.keys
+      if cv == :_TOTAL
+        puts "@cvs[:_TOTAL] = #{@cvs[cv]}"
+      else
+        puts "@cvs[:#{cv}][:_TOTAL] = #{@cvs[cv][:_TOTAL]}"
+        for p in Params
+          next unless p[1] == :discrete
+          pn = p[0]
+          for pv in @cvs[cv][pn].keys
+            if pv == :_TOTAL
+              puts "@cvs[:#{cv}][:#{pn}][:_TOTAL] = #{@cvs[cv][pn][:_TOTAL]}"
+            else
+              puts "@cvs[:#{cv}][:#{pn}][\"#{pv}\"] = #{@cvs[cv][pn][pv]}"
+            end
+          end
+        end
+      end
+    end
     for p in Params
       next unless p[1] == :discrete
-      p = p[0]
-      for v in @counts[p].keys
-        unless v == :_TOTAL
-          for c in [:no_admit, :admit_no_matriculate, :admit_matriculate]
-            puts "counts[#{p}][#{v}][#{c}] = #{@counts[p][v][c]}"
-          end
+      pn = p[0]
+      for pv in @pvs[pn].keys
+        if pv == :_TOTAL
+          puts "@pvs[:#{pn}][:_TOTAL] = #{@pvs[pn][:_TOTAL]}"
+        else
+          puts "@pvs[:#{pn}][\"#{pv}\"] = #{@pvs[pn][pv]}"
         end
       end
     end
