@@ -38,8 +38,10 @@ class NaiveBayes
     [:admit_status, :discrete],
   ]
 
-  def train (instance)
+  def learn (instance)
     class_val = instance[19].nil? ? :no_admit : instance[20].nil? ? :admit_no_matriculate : :admit_matriculate
+    if @class_counts[class_val].nil? then @class_counts[class_val] = 0 end
+    @class_counts[class_val] += 1
     Params.each_index do |i|
       if Params[i][1] == :discrete
         p = Params[i][0]
@@ -51,14 +53,49 @@ class NaiveBayes
     end
   end
 
+  def predict (instance)
+    ret = {}
+    for cv in @class_counts.keys
+      cv_prob = @class_counts[cv]
+      pv_prob = 1
+      Params.each_index do |i|
+        if Params[i][1] == :discrete
+          p = Params[i][0]
+          if @counts[p].nil? then @counts[p] = {} end
+          if @counts[p][instance[i]].nil? then @counts[p][instance[i]] = {} end
+          if @counts[p][instance[i]][cv].nil? then @counts[p][instance[i]][cv] = 0 end
+          cvs_total = 0
+          for ocv in @counts[p][instance[i]].keys
+            cvs_total += @counts[p][instance[i]][ocv]
+          end
+          cv_prob *= @counts[p][instance[i]][cv] / cvs_total
+          pvs_total = 0
+          for opv in @counts[p].keys
+            for ocv in @counts[p][opv].keys
+              pvs_total += @counts[p][opv][ocv]
+            end
+          end
+          this_pv_total = 0
+          for ocv in @counts[p][instance[i]].keys
+            this_pv_total += @counts[p][instance[i]][ocv]
+          end
+          pv_prob *= this_pv_total / pvs_total
+        end
+      end
+      ret[cv] = cv_prob / pv_prob
+    end
+    return ret
+  end
+
   def initialize(params = {})
     @counts = {}
+    @class_counts = {}
     if file = params[:training_file_name]
        # counts[attr name][attr value][class] = count
       data = CSV.read(file)
       key = data.shift
       for instance in data
-        train instance
+        learn instance
       end
     end
   end
