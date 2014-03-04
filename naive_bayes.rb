@@ -1,15 +1,7 @@
+require 'csv'
 
-def split_line (line)
-  return line.split ','
-end
-
-lines = []
-File.open 'admissions_data.csv' do |f|
-  f.each_line do |l|
-    lines << l
-  end
-end
-key = split_line lines.shift
+data = CSV.read('admissions_data.csv')
+key = data.shift
 
 Params = [
   [:id, :unused],
@@ -50,9 +42,8 @@ Params = [
  # counts[attr name][attr value][class] = count
 counts = {}
 
-for l in lines
-  params = split_line l  # TODO: commas in quotes
-  class_val = params[19].empty? ? :no_admit : params[20].empty? ? :admit_no_matriculate : :admit_matriculate
+for params in data
+  class_val = params[19].nil? ? :no_admit : params[20].nil? ? :admit_no_matriculate : :admit_matriculate
   Params.each_index do |i|
     if Params[i][1] == :discrete
       p = Params[i][0]
