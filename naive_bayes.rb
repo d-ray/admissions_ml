@@ -38,17 +38,21 @@ class NaiveBayes
     [:admit_status, :discrete],
   ]
 
+  def default_class_counts
+    return {no_admit: 0, admit_no_matriculate: 0, admit_matriculate: 0, _TOTAL: 0}
+  end
+
   def learn (instance)
     class_val = instance[19].nil? ? :no_admit : instance[20].nil? ? :admit_no_matriculate : :admit_matriculate
+    @class_counts[:_TOTAL] += 1
     @class_counts[class_val] += 1
     Params.each_index do |i|
       if Params[i][1] == :discrete
         p = Params[i][0]
-        @counts[p] = {} if @counts[p].nil?
+        @counts[p] = {_TOTAL: 0} if @counts[p].nil?
         @counts[p][:_TOTAL] += 1
-        @counts[p][instance[i]] = {} if @counts[p][instance[i]].nil?
+        @counts[p][instance[i]] = default_class_counts if @counts[p][instance[i]].nil?
         @counts[p][instance[i]][:_TOTAL] += 1
-        @counts[p][instance[i]][class_val] = 0 if @counts[p][instance[i]][class_val].nil?
         @counts[p][instance[i]][class_val] += 1
       end
     end
@@ -57,40 +61,24 @@ class NaiveBayes
   def predict (instance)
     ret = {}
     for cv in @class_counts.keys
-      cv_prob = @class_counts[cv]
-      pv_prob = 1
+      prob = @class_counts[cv]
       Params.each_index do |i|
         if Params[i][1] == :discrete
           p = Params[i][0]
-          @counts[p] = {} if @counts[p].nil?
-          @counts[p][instance[i]] = {} if @counts[p][instance[i]].nil?
-          @counts[p][instance[i]][cv] = 0 if @counts[p][instance[i]][cv].nil?
-          cvs_total = 0
-          for ocv in @counts[p][instance[i]].keys
-            cvs_total += @counts[p][instance[i]][ocv]
-          end
-          cv_prob *= @counts[p][instance[i]][cv] / cvs_total
-          pvs_total = 0
-          for opv in @counts[p].keys
-            for ocv in @counts[p][opv].keys
-              pvs_total += @counts[p][opv][ocv]
-            end
-          end
-          this_pv_total = 0
-          for ocv in @counts[p][instance[i]].keys
-            this_pv_total += @counts[p][instance[i]][ocv]
-          end
-          pv_prob *= this_pv_total / pvs_total
+          @counts[p] = {_TOTAL: 0} if @counts[p].nil?
+          @counts[p][instance[i]] = default_class_counts if @counts[p][instance[i]].nil?
+          prob *= @counts[p][instance[i]][cv] / @counts[p][instance[i]][:_TOTAL]
+          prob /= @counts[p][instance[i]][:_TOTAL] / @counts[p][:_TOTAL]
         end
       end
-      ret[cv] = cv_prob / pv_prob
+      ret[cv] = prob
     end
     return ret
   end
 
   def initialize(params = {})
     @counts = {}
-    @class_counts = {no_admit: 0, admit_no_matriculate: 0, admit_matriculate: 0}
+    @class_counts = default_class_counts
     if file = params[:training_file_name]
        # counts[attr name][attr value][class] = count
       data = CSV.read(file)
@@ -106,9 +94,8 @@ class NaiveBayes
       next unless p[1] == :discrete
       p = p[0]
       for v in @counts[p].keys
-        unless @counts[p][v].nil?
+        unless v == :_TOTAL
           for c in [:no_admit, :admit_no_matriculate, :admit_matriculate]
-            @counts[p][v][c] = 0 if @counts[p][v][c].nil?
             puts "counts[#{p}][#{v}][#{c}] = #{@counts[p][v][c]}"
           end
         end
