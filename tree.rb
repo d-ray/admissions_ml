@@ -2,34 +2,39 @@ require 'decisiontree'
 
 class Tree
 
+  # the path to the training data folder
+  Training_Data_Folder = "training_data"
+  # the path to the test data folder
+  Test_Data_Folder = "test_data"
+  # the path to the config file folder
   Config_Folder = "config"
 
   # initialized with either a file of training data or a config file if training has already taken place
   def initialize(params = {})
     if params[:training_file_name]
-    @attributes = []
-    @attribute_types = {}
-    default_value = ""
-    training_data = [] # each data instance represented by an array with attribute values and class value last
-
-    File.open(params[:training_file_name]) do |f|
-      header_array = f.gets.chomp.split(',')
-      header_array.each do |attribute_with_type|
-        attribute_type_pair = attribute_with_type.split(':')
-        @attributes << attribute_type_pair.first
-        @attribute_types[attribute_type_pair.first.to_sym] = attribute_type_pair.last.to_sym
+      @attributes = []
+      @attribute_types = {}
+      default_value = ""
+      training_data = [] # each data instance represented by an array with attribute values and class value last
+  
+      File.open("#{Training_Data_Folder}/#{params[:training_file_name]}") do |f|
+        header_array = f.gets.chomp.split(',')
+        header_array.each do |attribute_with_type|
+          attribute_type_pair = attribute_with_type.split(':')
+          @attributes << attribute_type_pair.first
+          @attribute_types[attribute_type_pair.first.to_sym] = attribute_type_pair.last.to_sym
+        end
+  
+        default_value = f.gets.chomp
+  
+        f.each_line do |line|
+          training_data << extract_data_instance(line)
+        end
       end
-
-      default_value = f.gets.chomp
-
-      f.each_line do |line|
-        training_data << extract_data_instance(line)
-      end
-    end
-
-    @tree = DecisionTree::ID3Tree.new(attributes, training_data, default_value, attribute_types)
+  
+      @tree = DecisionTree::ID3Tree.new(@attributes, training_data, default_value, @attribute_types)
     elsif params[:config_file_name]
-      @tree = DecisionTree::ID3Tree.load_from_file(params[:config_file_name])
+      @tree = DecisionTree::ID3Tree.load_from_file("#{Config_Folder}/#{params[:config_file_name]}")
     else
       puts "Unrecognized parameters"
     end
@@ -43,7 +48,7 @@ class Tree
     @tree.train
   end
 
-  def train_and_save(config_file)
+  def train_and_save(config_file = "id3_config.txt")
     @tree.train
     @tree.graph("decision_tree_graph")
     @tree.ruleset
@@ -62,7 +67,7 @@ class Tree
     test_data = []
     @attributes = []
     @attribute_types = {}
-    File.open(test_file_name) do |f|
+    File.open("#{Test_Data_Folder}/#{test_file_name}") do |f|
       header_array = f.gets.chomp.split(',')
       header_array.each do |attribute_with_type|
         attribute_type_pair = attribute_with_type.split(':')
@@ -70,19 +75,25 @@ class Tree
         @attribute_types[attribute_type_pair.first.to_sym] = attribute_type_pair.last.to_sym
       end
 
+      f.gets # ignore default value
       f.each_line do |line|
         test_data << extract_data_instance(line)
       end
     end
 
-    correctly_classified_instances = 0
+    classification_counts = {}
     test_data.each do |instance|
       class_value = instance.delete_at(instance.size - 1)
-#puts "@tree.predict(instance): #{@tree.predict(instance)}; class_value: #{class_value})"
-      correctly_classified_instances += 1 if (@tree.predict(instance) == class_value)
+      classification_counts[class_value] ||= {correct: 0, total: 0}
+      classification_counts[class_value][:total] += 1
+      classification_counts[class_value][:correct] += 1 if (@tree.predict(instance) == class_value)
     end
 
-    (correctly_classified_instances.to_f / test_data.size)
+    total_correct = 0
+    classification_counts.values.each {|h| total_correct += h[:correct]}
+    puts "Total: #{total_correct} out of #{test_data.size} (#{(total_correct.to_f / test_data.size) * 100}%) correctly classified"
+    puts "By class value:"
+    classification_counts.each {|kv_pair| puts "Value #{kv_pair.first}: #{kv_pair.last[:correct]} out of #{kv_pair.last[:total]} (#{(kv_pair.last[:correct].to_f / kv_pair.last[:total]) * 100}%) correctly classified"}
   end
 
   def predict(instance)
@@ -104,5 +115,8 @@ class Tree
 end
 
 tree = Tree.new(:config_file_name => "id3_config.txt")
-puts tree.rate_accuracy("test_data/id3_test_data.txt")
+tree.rate_accuracy("id3_test_data.txt")
 tree.graph
+
+#tree = Tree.new(:training_file_name => "id3_training_data.txt")
+#tree.train_and_save
