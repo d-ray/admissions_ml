@@ -20,17 +20,18 @@ class NaiveBayes
 #        if # TODO is discrete
 #          for class_value in @class_values.keys
 #            for param_name in @param_values.keys
-#              @class_values[class_value][param_name]['_SUM'] = 0.0
+#              sum = 0.0
 #              for param_value in @class_values[class_value][param_name].keys
 #                @class_values[class_value][param_name][param_value].times do
-#                  @class_values[class_value][param_name]['_SUM'] += param_value
+#                  sum += param_value
 #                end
 #              end
-#              @class_values[class_value][param_name]['_MEAN'] = @class_values[class_value][param_name]['_SUM'] / @class_values[class_value][param_name]['_TOTAL']
-#              @class_values[class_value][param_name]['_VARIANCE'] = @class_values[class_value][param_name].map{|v|
-#                r = v - @class_values[class_value][param_name]['_MEAN']
+#              mean = sum / @class_values[class_value][param_name]['_TOTAL']
+#              variance = @class_values[class_value][param_name].map{|v|
+#                r = v - mean
 #                return r * r
 #              }.inject(0, :+)
+#              @class_values[class_value][param_name] = {'_MEAN' => mean, '_VARIANCE' => variance}
 #            end
 #          end
 #        end
@@ -47,22 +48,14 @@ class NaiveBayes
             @class_values["_TOTAL"] = value
           else
             @param_values[param_name] = {} if @param_values[param_name].nil?
-            if param_value == '_TOTAL'
-              @param_values[param_name]["_TOTAL"] = value
-            else
-              @param_values[param_name][param_value] = value
-            end
+            @param_values[param_name][param_value] = value
           end
         else
           if param_name == "_TOTAL"
             @class_values[class_value]["_TOTAL"] = value
           else
             @class_values[class_value][param_name] = {} if @class_values[class_value][param_name].nil?
-            if param_value == '_TOTAL'
-              @class_values[class_value][param_name]["_TOTAL"] = value
-            else
-              @class_values[class_value][param_name][param_value] = value
-            end
+            @class_values[class_value][param_name][param_value] = value
           end
         end
       end
@@ -85,22 +78,14 @@ class NaiveBayes
           csv << [class_value.to_s, '_TOTAL', '_TOTAL', @class_values[class_value]["_TOTAL"]]
           @params.each do |param_name|
             for param_value in @class_values[class_value][param_name].keys
-              if param_value == "_TOTAL"
-                csv << [class_value.to_s, param_name, '_TOTAL', @class_values[class_value][param_name][param_value]]
-              else
-                csv << [class_value.to_s, param_name, param_value, @class_values[class_value][param_name][param_value]]
-              end
+              csv << [class_value.to_s, param_name, param_value, @class_values[class_value][param_name][param_value]]
             end
           end
         end
       end
       @params.each do |param_name|
         for param_value in @param_values[param_name].keys
-          if param_value == "_TOTAL"
-            csv << ['_TOTAL', param_name.to_s, '_TOTAL', @param_values[param_name][param_value]]
-          else
-            csv << ['_TOTAL', param_name.to_s, param_value, @param_values[param_name][param_value]]
-          end
+          csv << ['_TOTAL', param_name.to_s, param_value, @param_values[param_name][param_value]]
         end
       end
     end
