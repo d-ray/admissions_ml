@@ -17,20 +17,24 @@ Milestone #1:
 - process data to be used by the algorithms
 
 Milestone #2:
-- implement 2-3 additional ML algorithms (naive bayes,...)
-- add appropriate data processing options
+- implement naive_bayes
 - ensure that training results can be saved for all algorithms
-- write separate files to train and test all algorithms
+- write separate file to train and test all algorithms
 
 Milestone #3:
-- calculate distances between zip codes
-- make adjustments to each algorithm to gauge their highest level of performance
-- select one (most promising) algorithm and explore further improvements
-- talk to admissions office for ideas on other features that would improve product usefulness (e.g. number of students to accept as a parameter, provide estimated accuracy of prediction)
+- reorganize and improve prepare_data.rb
+- implement support vector machine
+- incorporate naive_bayes into design paradigm (accept input from prepare_data.rb)
 - error break down for classifications
 - partition training and test sets by year for realism
 
 Milestone #4
+- calculate distances between zip codes
+- allow the option of using two class values (accept or not) rather than three
+- make adjustments to each algorithm to gauge their highest level of performance
+- select one (most promising) algorithm and explore further improvements
+
+Wrap-up
 - finish improvements to selected algorithm
-- implement additional features for admissions office as determined prior to Milestone #3
 - build interface to allow use by admissions staff
+- if feasible, implement any requested additional helpful features for admissions office

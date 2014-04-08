@@ -27,14 +27,14 @@ class PrepareData
   Gift_Discretization = [5000,10000,15000,20000,25000,30000]
 
   # Support Vector Machine specific values
-  SVM_Class_Values = {"no_admit" => "0", "admit_no_matriculate" => "1", "admit_matriculate" => "2"}
+  SVM_Class_Values = {"no_admit" => "-1", "admit_no_matriculate" => "0", "admit_matriculate" => "1"}
 
   Attributes = [
     [:id, {type: :unused}],
     [:gender, {type: :discrete, discrete_options: 2}],
     [:ethnicity, {type: :discrete, discrete_options: 10}],
     [:state, {type: :discrete, discrete_options: 60}],
-    [:postal_code, {type: :discrete, continuous_denominator: 12500, discretiztion: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
+    [:postal_code, {type: :discrete, continuous_denominator: 12500, discretization: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
     [:country, {type: :discrete, discrete_options: 196}],
     [:major1, {type: :discrete, discrete_options: 113}],
     [:major2, {type: :discrete, discrete_options: 113}],
@@ -60,26 +60,23 @@ class PrepareData
     [:scholarships_bumped, {type: :discrete, discrete_options: 4, continuous_denominator: 0}],
     [:academic_index, {type: :continuous, discretization: Academic_Index_Discretization, continuous_denominator: 10000}],
     [:academic_year, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
-    [:family_income, {type: :continuous, discretization: Family_Income_Discretization, discrete_options: 1, continuous_denominator: 100000000}],
-    [:family_contribution, {type: :continuous, discretization: Contribution_Discretization, discrete_options: 1, continuous_denominator: 100000000}],
-    [:total_gift_aid, {type: :continuous, discretization: Gift_Discretization, discrete_options: 1, continuous_denominator: 100000}],
+    [:family_income, {type: :continuous, discretization: Family_Income_Discretization, continuous_denominator: 100000000}],
+    [:family_contribution, {type: :continuous, discretization: Contribution_Discretization, continuous_denominator: 100000000}],
+    [:total_gift_aid, {type: :continuous, discretization: Gift_Discretization, continuous_denominator: 100000}],
     [:admit_status, {type: :unused}]
   ]
 
   def self.process_postal_code(postal_code)
-puts "postal_code: #{postal_code}"
       @distance_calculator ||= Zips.new
     if @distance_calculator.data_for?(postal_code)
-puts "if"
       @distance_calculator.distance(School_Postal_Code, postal_code)
     else
-puts "else"
       ""
     end
   end
 
   # initialized with a csv file containing data instances for training/testing
-  def initialize(partition_by_year = false, training_files = {}, test_files = {}, data_file = "admissions_data.csv")
+  def initialize(binary_decision = false, partition_by_year = false, training_files = {}, test_files = {}, data_file = "admissions_data.csv")
     Classifiers.each do |classifier|
       training_files[classifier] ||= "#{classifier.to_s}_training_data.txt"
       test_files[classifier] ||= "#{classifier.to_s}_test_data.txt"
@@ -119,7 +116,7 @@ puts "else"
 
         class_value_attributes = {}
         class_value_attribute_indices.each {|kv_pair| class_value_attributes[kv_pair.first] = instance_array[kv_pair.last]}
-        class_value = determine_class_value(class_value_attributes)
+        class_value = determine_class_value(class_value_attributes, binary_decision)
 
         (Attributes.size - instance_array.size).times {instance_array << ""} #ensure the appropriate number of attributes in case trailing empty strings are dropped
 
@@ -244,7 +241,7 @@ puts "else"
   def write_nb_file(file, data)
     header = ""
     Attributes.each do |attribute| 
-      header << "#{attribute.first}," unless attribute.last[:type] == :unused
+      header << "#{attribute.first}:#{attribute.last[:type].to_s}," unless attribute.last[:type] == :unused
     end
 
     File.open(file, "w") do |f|
@@ -272,26 +269,27 @@ puts "else"
 
   def write_svm_file(file, data)
     File.open(file, "w") do |f|
-      #f.puts(header.chomp(','))
       data.each do |instance|
         instance_data = ""
         instance.first.each_with_index do |attribute_value, index|
-          if Attributes[index].last[:type] == :unused
-            next
-          else
-            instance_data << "#{convert_attribute_to_numeric_option(attribute_value,index)},"
+          if Attributes[index].last[:discrete_options]
+            # discrete attribute
+            instance_data << "#{convert_discrete_attribute_to_numeric_input(attribute_value, index)} "
+          elsif Attributes[index].last[:continuous_denominator]
+            # continuous attribute
+            instance_data << "#{attribute_value.to_f / Attributes[index].last[:continuous_denominator]} "
           end
         end
-        f.puts("#{instance_data.chomp(',')}:#{SVM_Class_Values[instance.last]}") # add class value at the end
+        f.puts("#{instance_data.chomp(' ')}:#{SVM_Class_Values[instance.last]}") # inputs for given attribute values with class value
       end
     end
   end
 
-  def determine_class_value(attributes)
+  def determine_class_value(attributes, binary_decision = false)
     if attributes[:admit_date].empty?
       "no_admit"
     elsif attributes[:enrollment_date].empty?
-      "admit_no_matriculate"
+      binary_decision ? "no_admit" : "admit_no_matriculate"
     else
       "admit_matriculate"
     end
@@ -303,8 +301,8 @@ puts "else"
     attribute_option_hash[attribute]
   end
 
-  def convert_discrete_attribute_to_ann_input(attribute, index)
-return "" if Attributes[index].last[:discrete_options] == 0
+  def convert_discrete_attribute_to_numeric_input(attribute, index)
+return "" if Attributes[index].last[:discrete_options] == 0 # TODO: remove this when all attributes are being used appropriately
     numeric_option = convert_attribute_to_numeric_option(attribute, index)
     
     attribute_array = Array.new(Attributes[index].last[:discrete_options], 0)
@@ -326,5 +324,5 @@ return "" if Attributes[index].last[:discrete_options] == 0
   end
 end
 
-#PrepareData.new.prepare_data(:all)
-PrepareData.new(true, {ann: "ann_train_by_year.txt", id3: "id3_train_by_year.txt", nb: "nb_train_by_year.txt", svm: "svm_train_by_year.txt"}, {ann: "ann_test_by_year.txt", id3: "id3_test_by_year.txt", nb: "nb_test_by_year.txt", svm: "svm_test_by_year.txt"}).prepare_data(:all)
+PrepareData.new.prepare_data(:nb)
+#PrepareData.new(true, {ann: "ann_train_by_year.txt", id3: "id3_train_by_year.txt", nb: "nb_train_by_year.txt", svm: "svm_train_by_year.txt"}, {ann: "ann_test_by_year.txt", id3: "id3_test_by_year.txt", nb: "nb_test_by_year.txt", svm: "svm_test_by_year.txt"}).prepare_data(:all)
