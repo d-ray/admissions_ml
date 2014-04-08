@@ -165,6 +165,10 @@ class NaiveBayes
     classification_counts.each {|kv_pair| puts "Value #{kv_pair.first}: #{kv_pair.last[:correct]} out of #{kv_pair.last[:total]} (#{(kv_pair.last[:correct].to_f / kv_pair.last[:total]) * 100}%) correctly classified"}
   end
 
+  def self.density_at (mean, variance, value)
+    1/Math.sqrt(2*Math::PI*variance) * Math.exp(-((value-mean)*(value-mean))/(2 * variance))
+  end
+
 end
 
 NaiveBayes.new(training_file_name: "nb_train_by_year.txt").train_and_save
