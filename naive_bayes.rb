@@ -17,24 +17,24 @@ class NaiveBayes
           class_value = instance.delete_at(instance.size - 1)
           @training_data << [instance, class_value]
         end
-#        if # TODO is discrete
-#          for class_value in @class_values.keys
-#            for param_name in @param_values.keys
-#              sum = 0.0
-#              for param_value in @class_values[class_value][param_name].keys
-#                @class_values[class_value][param_name][param_value].times do
-#                  sum += param_value
-#                end
-#              end
-#              mean = sum / @class_values[class_value][param_name]['_TOTAL']
-#              variance = @class_values[class_value][param_name].map{|v|
-#                r = v - mean
-#                return r * r
-#              }.inject(0, :+)
-#              @class_values[class_value][param_name] = {'_MEAN' => mean, '_VARIANCE' => variance}
-#            end
-#          end
-#        end
+        if false # TODO is discrete
+          for class_value in @class_values.keys
+            for param_name in @param_values.keys
+              sum = 0.0
+              for param_value in @class_values[class_value][param_name].keys
+                @class_values[class_value][param_name][param_value].times do
+                  sum += param_value.to_f
+                end
+              end
+              mean = sum / @class_values[class_value][param_name]['_TOTAL']
+              variance = @class_values[class_value][param_name].map{|v|
+                r = v - mean
+                return r * r
+              }.inject(0, :+)
+              @class_values[class_value][param_name] = {'_MEAN' => mean, '_VARIANCE' => variance}
+            end
+          end
+        end
       end
     elsif file = params[:config_file_name]
       config_data = CSV.read("#{Config_Folder}/#{file}")
@@ -101,10 +101,12 @@ class NaiveBayes
       @class_values[class_value][param_name]["_TOTAL"] += 1.0
       @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
       @class_values[class_value][param_name][param_value] += 1.0
-      @param_values[param_name] = {'_TOTAL' => 0.0} if @param_values[param_name].nil?
-      @param_values[param_name]["_TOTAL"] += 1.0
-      @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
-      @param_values[param_name][param_value] += 1.0
+      if true # TODO is NOT discrete
+        @param_values[param_name] = {'_TOTAL' => 0.0} if @param_values[param_name].nil?
+        @param_values[param_name]["_TOTAL"] += 1.0
+        @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
+        @param_values[param_name][param_value] += 1.0
+      end
     end
   end
 
@@ -116,11 +118,16 @@ class NaiveBayes
       prob = @class_values[class_value]["_TOTAL"] / @class_values["_TOTAL"]
       @params.each_with_index do |param_name, i|
         param_value = instance[i]
-         # TODO: this seems to cause a lot of floating-point inaccuracy.
-        @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
-        prob *= (@class_values[class_value][param_name][param_value]+1) / (@class_values[class_value][param_name]["_TOTAL"]+1)
-        @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
-        prob /= (@param_values[param_name][param_value]+1) / (@param_values[param_name]["_TOTAL"]+1)
+        if false # TODO is discrete
+            # TODO I'm not sure this is correct by itself.  Do we have to divide by the total like below?
+          prob *= NaiveBayes.density_at(@class_values[class_value][param_name]['_MEAN'].to_f, @class_values[class_value][param_name]['_VARIANCE'].to_f, param_value)
+        else
+           # TODO: this seems to cause a lot of floating-point inaccuracy.
+          @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
+          prob *= (@class_values[class_value][param_name][param_value]+1) / (@class_values[class_value][param_name]["_TOTAL"]+1)
+          @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
+          prob /= (@param_values[param_name][param_value]+1) / (@param_values[param_name]["_TOTAL"]+1)
+        end
       end
       if prob != prob
         puts "Instance led to NAN result: #{instance.inspect}"
