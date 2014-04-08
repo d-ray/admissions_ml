@@ -17,6 +17,23 @@ class NaiveBayes
           class_value = instance.delete_at(instance.size - 1)
           @training_data << [instance, class_value]
         end
+#        if # TODO is discrete
+#          for class_value in @class_values.keys
+#            for param_name in @param_values.keys
+#              @class_values[class_value][param_name]['_SUM'] = 0.0
+#              for param_value in @class_values[class_value][param_name].keys
+#                @class_values[class_value][param_name][param_value].times do
+#                  @class_values[class_value][param_name]['_SUM'] += param_value
+#                end
+#              end
+#              @class_values[class_value][param_name]['_MEAN'] = @class_values[class_value][param_name]['_SUM'] / @class_values[class_value][param_name]['_TOTAL']
+#              @class_values[class_value][param_name]['_VARIANCE'] = @class_values[class_value][param_name].map{|v|
+#                r = v - @class_values[class_value][param_name]['_MEAN']
+#                return r * r
+#              }.inject(0, :+)
+#            end
+#          end
+#        end
       end
     elsif file = params[:config_file_name]
       config_data = CSV.read("#{Config_Folder}/#{file}")
