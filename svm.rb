@@ -14,11 +14,24 @@ class SVM
     if params[:training_file_name]
       training_data = []
       File.open("#{Training_Data_Folder}/#{params[:training_file_name]}") do |f| 
+#        f.each_line do |line|
+#          instance = line.chomp.split(/[,:]/)
+#          class_value = instance.delete_at(instance.size - 1)
+#          training_data << [Libsvm::Node.features(instance.map(&:to_f)), class_value.to_f]
+#        end 
+        2.times {f.gets} # get rid of header
+        
         f.each_line do |line|
-          instance = line.chomp.split(/[,:]/)
-          class_value = instance.delete_at(instance.size - 1)
-          training_data << [Libsvm::Node.features(instance.map(&:to_f)), class_value.to_f]
-        end 
+          case line.chomp
+          when "" #ignore blank lines
+          when /^[01] [01] [01]$/
+            class_value = line.chomp.split(' ').map! {|n| n.to_f}
+            test_data << [@attributes, class_value]
+            training_data << [Libsvm::Node.features(attributes), class_value.to_f]
+          else
+            @attributes = line.chomp.split(' ').map! {|n| n.to_f}
+          end
+        end
       end 
 
       @problem = Libsvm::Problem.new
@@ -29,7 +42,7 @@ class SVM
       @parameter.eps = 0.001
       @parameter.c = 10
     elsif params[:config_file_name]
-      @svm = Libsvm::Model.load("#{Config_Folder}/#{config_file}")
+      @svm = Libsvm::Model.load("#{Config_Folder}/#{params[:config_file_name]}")
     else
       puts "Unrecognized parameters"
     end
@@ -44,7 +57,7 @@ class SVM
     @svm.save("#{Config_Folder}/#{config_file}")
   end
 
-  def rate_accuracy
+  def rate_accuracy(test_file_name)
     test_data = []
     File.open("#{Test_Data_Folder}/#{test_file_name}") do |f|
       @params = f.gets.split(',') # reader param names from header
@@ -58,6 +71,7 @@ class SVM
       class_value = instance.delete_at(instance.size - 1)
       classification_counts[class_value] ||= {correct: 0, total: 0}
       classification_counts[class_value][:total] += 1
+puts "@svm.predict(Libsvm::Node.features(instance)): #{@svm.predict(Libsvm::Node.features(instance)).inspect}"
       classification_counts[class_value][:correct] += 1 if (@svm.predict(Libsvm::Node.features(instance)) == class_value)
     end
     
@@ -69,5 +83,5 @@ class SVM
   end
 end
 
-SVM.new({training_file_name: "svm_training_data.txt"}).train_and_save
-#SVM.new({config_file_name: "svm_config.txt"}).rate_accuracy
+#SVM.new({training_file_name: "svm_training_data.txt"}).train_and_save
+SVM.new({config_file_name: "svm_config.txt"}).rate_accuracy("svm_test_data.txt")
