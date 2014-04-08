@@ -95,11 +95,11 @@ class NaiveBayes
     @class_values[class_value]["_TOTAL"] += 1.0
     @params.each_with_index do |param_name, i|
       param_value = instance.first[i]
-      @class_values[class_value][param_name] = {_TOTAL: 0.0} if @class_values[class_value][param_name].nil?
+      @class_values[class_value][param_name] = {'_TOTAL' => 0.0} if @class_values[class_value][param_name].nil?
       @class_values[class_value][param_name]["_TOTAL"] += 1.0
       @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
       @class_values[class_value][param_name][param_value] += 1.0
-      @param_values[param_name] = {_TOTAL: 0.0} if @param_values[param_name].nil?
+      @param_values[param_name] = {'_TOTAL' => 0.0} if @param_values[param_name].nil?
       @param_values[param_name]["_TOTAL"] += 1.0
       @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
       @param_values[param_name][param_value] += 1.0
@@ -111,21 +111,20 @@ class NaiveBayes
      # P(C|F...) = P(C)P(F...|C)/P(F...)
     for class_value in @class_values.keys
       next if class_value == "_TOTAL"
-#puts "@class_values[#{class_value}][_TOTAL]: #{@class_values[class_value]["_TOTAL"]}"
-#puts "@class_values[_TOTAL]: #{@class_values["_TOTAL"]}"
       prob = @class_values[class_value]["_TOTAL"] / @class_values["_TOTAL"]
       @params.each_with_index do |param_name, i|
         param_value = instance[i]
          # TODO: this seems to cause a lot of floating-point inaccuracy.
         @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
-        prob *= @class_values[class_value][param_name][param_value] / @class_values[class_value][param_name]["_TOTAL"]
+        prob *= (@class_values[class_value][param_name][param_value]+1) / (@class_values[class_value][param_name]["_TOTAL"]+1)
         @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
-puts "@param_values[#{param_name}][#{param_value}]: #{@param_values[param_name][param_value]}"
-        prob /= @param_values[param_name][param_value] / @param_values[param_name]["_TOTAL"]
+        prob /= (@param_values[param_name][param_value]+1) / (@param_values[param_name]["_TOTAL"]+1)
+      end
+      if prob != prob
+        puts "Instance led to NAN result: #{instance.inspect}"
       end
       ret[class_value] = prob
     end
-puts "ret: #{ret.inspect}"
     return ret
   end
 
@@ -168,9 +167,8 @@ puts "ret: #{ret.inspect}"
 
 end
 
-#NaiveBayes.new(training_file_name: "nb_training_data.txt").train_and_save
+NaiveBayes.new(training_file_name: "nb_train_by_year.txt").train_and_save
 nb = NaiveBayes.new(config_file_name: "nb_config.csv")
-nb.rate_accuracy("nb_test_data.txt")
 nb.rate_accuracy("nb_test_by_year.txt")
 
 #if __FILE__ == $0
