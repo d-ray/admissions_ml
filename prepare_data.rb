@@ -34,7 +34,7 @@ class PrepareData
     [:gender, {type: :discrete, discrete_options: 2}],
     [:ethnicity, {type: :discrete, discrete_options: 10}],
     [:state, {type: :discrete, discrete_options: 60}],
-    [:postal_code, {type: :discrete, continuous_denominator: 12500, discretiztion: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
+    [:postal_code, {type: :discrete, continuous_denominator: 12500, discretization: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
     [:country, {type: :discrete, discrete_options: 196}],
     [:major1, {type: :discrete, discrete_options: 113}],
     [:major2, {type: :discrete, discrete_options: 113}],
@@ -241,7 +241,7 @@ class PrepareData
   def write_nb_file(file, data)
     header = ""
     Attributes.each do |attribute| 
-      header << "#{attribute.first}," unless attribute.last[:type] == :unused
+      header << "#{attribute.first}:#{attribute.last[:type].to_s}," unless attribute.last[:type] == :unused
     end
 
     File.open(file, "w") do |f|
@@ -324,5 +324,5 @@ return "" if Attributes[index].last[:discrete_options] == 0 # TODO: remove this 
   end
 end
 
-PrepareData.new.prepare_data(:svm)
+PrepareData.new.prepare_data(:nb)
 #PrepareData.new(true, {ann: "ann_train_by_year.txt", id3: "id3_train_by_year.txt", nb: "nb_train_by_year.txt", svm: "svm_train_by_year.txt"}, {ann: "ann_test_by_year.txt", id3: "id3_test_by_year.txt", nb: "nb_test_by_year.txt", svm: "svm_test_by_year.txt"}).prepare_data(:all)
