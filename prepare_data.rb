@@ -1,3 +1,5 @@
+require './zips.rb'
+
 class PrepareData
 
   # the types of classifiers to prepare data for
@@ -6,6 +8,8 @@ class PrepareData
   Training_Data_Folder = "training_data"
   # the path to the test data folder
   Test_Data_Folder = "test_data"
+  # the postal code of the school
+  School_Postal_Code = "93108"
 
   # ID3 specific values
   Default_Value = "no_admit"
@@ -14,6 +18,7 @@ class PrepareData
   ANN_Class_Values = {"no_admit" => "1 0 0", "admit_no_matriculate" => "0 1 0", "admit_matriculate" => "0 0 1"}
 
   # Naive Bayes specific values
+  Postal_Code_Discretization = [25, 100, 200, 300, 400, 500, 1000, 1500, 2000, 2500, 3000]
   GPA_Discretization = [1.0,1.5,2.0,2.5,3.0,3.5,4.0]
   SAT_Discretization = [700,750,800,850,900,950,1000,1050,1100,1150,1200,1250,1300,1350,1450,1500,1550]
   Academic_Index_Discretization = [5000,5500,6000,6500,7000,7500,8000,8500,9000,9500]
@@ -29,7 +34,7 @@ class PrepareData
     [:gender, {type: :discrete, discrete_options: 2}],
     [:ethnicity, {type: :discrete, discrete_options: 10}],
     [:state, {type: :discrete, discrete_options: 60}],
-    [:postal_code, {type: :discrete, continuous_denominator: 100000}], # 12500 for zip code distances
+    [:postal_code, {type: :discrete, continuous_denominator: 12500, discretiztion: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
     [:country, {type: :discrete, discrete_options: 196}],
     [:major1, {type: :discrete, discrete_options: 113}],
     [:major2, {type: :discrete, discrete_options: 113}],
@@ -61,6 +66,18 @@ class PrepareData
     [:admit_status, {type: :unused}]
   ]
 
+  def self.process_postal_code(postal_code)
+puts "postal_code: #{postal_code}"
+      @distance_calculator ||= Zips.new
+    if @distance_calculator.data_for?(postal_code)
+puts "if"
+      @distance_calculator.distance(School_Postal_Code, postal_code)
+    else
+puts "else"
+      ""
+    end
+  end
+
   # initialized with a csv file containing data instances for training/testing
   def initialize(partition_by_year = false, training_files = {}, test_files = {}, data_file = "admissions_data.csv")
     Classifiers.each do |classifier|
@@ -86,26 +103,29 @@ class PrepareData
     # training and test sets are arrays of pairs consisting of an instance's attribute values and its class value
     @training_data = []
     @test_data = []
+    instances_by_year = {} if partition_by_year
 
     File.open(data_file) do |f|
       f.gets # ignore header
       f.each_line do |line|
         line.gsub!(/".*,.*"/) {|attribute| "\\#{attribute.gsub(',','')}"} #remove commas contained in matched quotes
         instance_array = line.chomp.split(',')
+        Attributes.each_with_index do |attribute, index|
+          # perform any necessary processing of attributes
+          if attribute.last[:processing]
+            instance_array[index] = attribute.last[:processing].call(instance_array[index])
+          end
+        end
 
         class_value_attributes = {}
         class_value_attribute_indices.each {|kv_pair| class_value_attributes[kv_pair.first] = instance_array[kv_pair.last]}
         class_value = determine_class_value(class_value_attributes)
+
         (Attributes.size - instance_array.size).times {instance_array << ""} #ensure the appropriate number of attributes in case trailing empty strings are dropped
-        #Reject_Indices.sort! {|m,n| n <=> m} # sort indices in descending order
-        #Reject_Indices.each {|n| instance_array.delete_at(n)}
+
         if partition_by_year
-          #if instance_array[academic_year_index].slice(0,4) == Time.now.year #TODO
-          if instance_array[academic_year_index].slice(0,4) == "2013"
-            @test_data << [instance_array, class_value]
-          else
-            @training_data << [instance_array, class_value]
-          end
+          instances_by_year[instance_array[academic_year_index].slice(0,4) ] ||= []
+          instances_by_year[instance_array[academic_year_index].slice(0,4) ] << [instance_array, class_value]
         else
           if rand(3) == 0
             @test_data << [instance_array, class_value]
@@ -114,6 +134,14 @@ class PrepareData
           end
         end
       end
+    end
+    if partition_by_year
+      max_year = instances_by_year.keys.max
+      @test_data = instances_by_year[max_year]
+
+      previous_years = instances_by_year.keys
+      previous_years.delete(max_year)
+      previous_years.each {|year| @training_data.concat(instances_by_year[year])}
     end
   end
 
@@ -298,4 +326,5 @@ return "" if Attributes[index].last[:discrete_options] == 0
   end
 end
 
+#PrepareData.new.prepare_data(:all)
 PrepareData.new(true, {ann: "ann_train_by_year.txt", id3: "id3_train_by_year.txt", nb: "nb_train_by_year.txt", svm: "svm_train_by_year.txt"}, {ann: "ann_test_by_year.txt", id3: "id3_test_by_year.txt", nb: "nb_test_by_year.txt", svm: "svm_test_by_year.txt"}).prepare_data(:all)

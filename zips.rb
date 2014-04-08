@@ -19,6 +19,11 @@ class Zips
     end
   end
 
+  # Indicates whether there are coordinates stored for the zip code.
+  def data_for?(zip)
+    !! @zips[zip]
+  end
+
    # Just get the coordinates of a zip code.
   def coordinates (zip)
     @zips[zip]
