@@ -239,20 +239,25 @@ class PrepareData
   end
 
   def write_nb_file(file, data)
-    header = ""
+    attribute_header = ""
+    attribute_type_header = ""
     Attributes.each do |attribute| 
-      header << "#{attribute.first}:#{attribute.last[:type].to_s}," unless attribute.last[:type] == :unused
+      unless attribute.last[:type] == :unused
+        attribute_header << "#{attribute.first}," 
+        attribute_type_header << "#{attribute.last[:type].to_s},"
+      end
     end
 
     File.open(file, "w") do |f|
-      f.puts(header.chomp(','))
+      f.puts(attribute_header.chomp(','))
+      f.puts(attribute_type_header.chomp(','))
       data.each do |instance|
         instance_data = ""
         instance.first.each_with_index do |attribute_value, index|
           if Attributes[index].last[:type] == :unused
             next
           elsif Attributes[index].last[:discretization]
-            instance_data << "#{discretize(attribute_value, Attributes[index].last[:discretization])},"
+            instance_data << "#{discretize(attribute_value.to_s, Attributes[index].last[:discretization])},"
           else
             instance_data << "#{attribute_value},"
           end
