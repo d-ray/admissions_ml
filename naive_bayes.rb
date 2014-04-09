@@ -119,7 +119,7 @@ class NaiveBayes
       @params.each_with_index do |param_name, i|
         param_value = instance[i]
         if false # TODO is discrete
-            # TODO I'm not sure this is correct by itself.  Do we have to divide by the total like below?
+            # TODO This needs to be scaled by something.  Perhaps the density_at for all class_values?
           prob *= NaiveBayes.density_at(@class_values[class_value][param_name]['_MEAN'].to_f, @class_values[class_value][param_name]['_VARIANCE'].to_f, param_value)
         else
            # TODO: this seems to cause a lot of floating-point inaccuracy.
