@@ -85,7 +85,7 @@ class PrepareData
     @test_files = test_files
 
     class_value_attribute_indices = {}
-    academic_year_index = -1
+    academic_year_index = nil
     Attributes.each_with_index  do |attribute, index|
       if attribute.last[:class_value]
         class_value_attribute_indices[attribute.first] = index 
