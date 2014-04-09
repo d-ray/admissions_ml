@@ -12,29 +12,14 @@ class NaiveBayes
       @training_data = []
       File.open("#{Training_Data_Folder}/#{params[:training_file_name]}") do |f|
         @params = f.gets.split(',') # read param names from header
+        @param_types = {}
+        f.gets.split(',').each_with_index {|type, index| @param_types[@params[index]] = type} # read param types from header
         f.each_line do |line|
           instance = line.chomp.split(/[,:]/)
           class_value = instance.delete_at(instance.size - 1)
           @training_data << [instance, class_value]
         end
-#        if # TODO is discrete
-#          for class_value in @class_values.keys
-#            for param_name in @param_values.keys
-#              sum = 0.0
-#              for param_value in @class_values[class_value][param_name].keys
-#                @class_values[class_value][param_name][param_value].times do
-#                  sum += param_value
-#                end
-#              end
-#              mean = sum / @class_values[class_value][param_name]['_TOTAL']
-#              variance = @class_values[class_value][param_name].map{|v|
-#                r = v - mean
-#                return r * r
-#              }.inject(0, :+)
-#              @class_values[class_value][param_name] = {'_MEAN' => mean, '_VARIANCE' => variance}
-#            end
-#          end
-#        end
+
       end
     elsif file = params[:config_file_name]
       config_data = CSV.read("#{Config_Folder}/#{file}")
@@ -65,6 +50,25 @@ class NaiveBayes
   def train
     for instance in @training_data
       learn instance
+    end
+
+    for param_name in @param_values.keys
+      if @param_types[param_name] == "continuous"
+        for class_value in @class_values.keys
+          sum = 0.0
+          for param_value in @class_values[class_value][param_name].keys
+            @class_values[class_value][param_name][param_value].times do
+              sum += param_value
+            end
+          end
+          mean = sum / @class_values[class_value][param_name]['_TOTAL']
+          variance = @class_values[class_value][param_name].map{|v|
+            r = v - mean
+            return r * r
+          }.inject(0, :+)
+          @class_values[class_value][param_name] = {'_MEAN' => mean, '_VARIANCE' => variance}
+        end
+      end
     end
   end
 
