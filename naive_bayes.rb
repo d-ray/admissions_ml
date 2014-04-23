@@ -11,15 +11,14 @@ class NaiveBayes
     if file = params[:training_file_name]
       @training_data = []
       File.open("#{Training_Data_Folder}/#{params[:training_file_name]}") do |f|
-        @params = f.gets.split(',') # read param names from header
+        @params = f.gets.chomp.split(',') # read param names from header
         @param_types = {}
-        f.gets.split(',').each_with_index {|type, index| @param_types[@params[index]] = type} # read param types from header
+        f.gets.chomp.split(',').each_with_index {|type, index| @param_types[@params[index]] = type} # read param types from header
         f.each_line do |line|
           instance = line.chomp.split(/[,:]/)
           class_value = instance.delete_at(instance.size - 1)
           @training_data << [instance, class_value]
         end
-
       end
     elsif file = params[:config_file_name]
       config_data = CSV.read("#{Config_Folder}/#{file}")
@@ -52,20 +51,25 @@ class NaiveBayes
       learn instance
     end
 
-    for param_name in @param_values.keys
+    for param_name in @params
       if @param_types[param_name] == "continuous"
         for class_value in @class_values.keys
+          next if class_value == "_TOTAL"
           sum = 0.0
+          variance = 0.0
           for param_value in @class_values[class_value][param_name].keys
-            @class_values[class_value][param_name][param_value].times do
-              sum += param_value
+            @class_values[class_value][param_name][param_value].to_i.times do
+              sum += param_value.to_f
             end
           end
           mean = sum / @class_values[class_value][param_name]['_TOTAL']
-          variance = @class_values[class_value][param_name].map{|v|
-            r = v - mean
-            return r * r
-          }.inject(0, :+)
+          @class_values[class_value][param_name].keys.each do |v|
+            #next if v == "_TOTAL"
+            r = v.to_f - mean
+            @class_values[class_value][param_name][param_value].to_i.times do
+              variance += (r * r) # add r^2 the number of times the value occurs
+            end
+          end
           @class_values[class_value][param_name] = {'_MEAN' => mean, '_VARIANCE' => variance}
         end
       end
@@ -88,6 +92,7 @@ class NaiveBayes
         end
       end
       @params.each do |param_name|
+        next if @param_types[param_name] == "continuous"
         for param_value in @param_values[param_name].keys
           csv << ['_TOTAL', param_name.to_s, param_value, @param_values[param_name][param_value]]
         end
@@ -105,10 +110,12 @@ class NaiveBayes
       @class_values[class_value][param_name]["_TOTAL"] += 1.0
       @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
       @class_values[class_value][param_name][param_value] += 1.0
-      @param_values[param_name] = {'_TOTAL' => 0.0} if @param_values[param_name].nil?
-      @param_values[param_name]["_TOTAL"] += 1.0
-      @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
-      @param_values[param_name][param_value] += 1.0
+      if @param_types[param_name] == "discrete"
+        @param_values[param_name] = {'_TOTAL' => 0.0} if @param_values[param_name].nil?
+        @param_values[param_name]["_TOTAL"] += 1.0
+        @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
+        @param_values[param_name][param_value] += 1.0
+      end
     end
   end
 
@@ -119,12 +126,18 @@ class NaiveBayes
       next if class_value == "_TOTAL"
       prob = @class_values[class_value]["_TOTAL"] / @class_values["_TOTAL"]
       @params.each_with_index do |param_name, i|
+#puts "prob(#{i}): #{prob}"
         param_value = instance[i]
-         # TODO: this seems to cause a lot of floating-point inaccuracy.
-        @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
-        prob *= (@class_values[class_value][param_name][param_value]+1) / (@class_values[class_value][param_name]["_TOTAL"]+1)
-        @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
-        prob /= (@param_values[param_name][param_value]+1) / (@param_values[param_name]["_TOTAL"]+1)
+        if @param_types[param_name] == "continuous" 
+            # TODO This needs to be scaled by something.  Perhaps the density_at for all class_values?
+          prob *= NaiveBayes.density_at(@class_values[class_value][param_name]['_MEAN'].to_f, @class_values[class_value][param_name]['_VARIANCE'].to_f, param_value.to_f)
+        else
+           # TODO: this seems to cause a lot of floating-point inaccuracy.
+          @class_values[class_value][param_name][param_value] = 0.0 if @class_values[class_value][param_name][param_value].nil?
+          prob *= (@class_values[class_value][param_name][param_value]+1) / (@class_values[class_value][param_name]["_TOTAL"]+1)
+          @param_values[param_name][param_value] = 0.0 if @param_values[param_name][param_value].nil?
+          prob /= (@param_values[param_name][param_value]+1) / (@param_values[param_name]["_TOTAL"]+1)
+        end
       end
       if prob != prob
         puts "Instance led to NAN result: #{instance.inspect}"
@@ -147,28 +160,27 @@ class NaiveBayes
     return max_class_value
   end
 
-  def rate_accuracy(test_file_name = "nb_test_data.txt")
+  def rate_accuracy(test_file_name)
     test_data = []
     File.open("#{Test_Data_Folder}/#{test_file_name}") do |f|
-      @params = f.gets.split(',') # reader param names from header
+      @params = f.gets.chomp.split(',') # read param names from header
+      @param_types = {}
+      f.gets.chomp.split(',').each_with_index {|type, index| @param_types[@params[index]] = type} # read param types from header
       f.each_line do |line|
         test_data << line.chomp.split(/[,:]/)
       end
     end
 
-    classification_counts = {}
+    confusion_matrix = {:_TOTAL => test_data.size}
     test_data.each do |instance|
-      class_value = instance.delete_at(instance.size - 1)
-      classification_counts[class_value] ||= {correct: 0, total: 0}
-      classification_counts[class_value][:total] += 1
-      classification_counts[class_value][:correct] += 1 if (self.predict(instance) == class_value)
+      actual_class_value = instance.delete_at(instance.size - 1)
+      predicted_class_value = self.predict(instance)
+      confusion_matrix[actual_class_value] ||= {:_TOTAL => 0}
+      confusion_matrix[actual_class_value][:_TOTAL] += 1
+      confusion_matrix[actual_class_value][predicted_class_value] ||= 0
+      confusion_matrix[actual_class_value][predicted_class_value] += 1
     end
-
-    total_correct = 0 
-    classification_counts.values.each {|h| total_correct += h[:correct]}
-    puts "Total: #{total_correct} out of #{test_data.size} (#{(total_correct.to_f / test_data.size) * 100}%) correctly classified"
-    puts "By class value:"
-    classification_counts.each {|kv_pair| puts "Value #{kv_pair.first}: #{kv_pair.last[:correct]} out of #{kv_pair.last[:total]} (#{(kv_pair.last[:correct].to_f / kv_pair.last[:total]) * 100}%) correctly classified"}
+    confusion_matrix
   end
 
   def self.density_at (mean, variance, value)
@@ -177,10 +189,7 @@ class NaiveBayes
 
 end
 
-NaiveBayes.new(training_file_name: "nb_train_by_year.txt").train_and_save
-nb = NaiveBayes.new(config_file_name: "nb_config.csv")
-nb.rate_accuracy("nb_test_by_year.txt")
-
-#if __FILE__ == $0
-#  NaiveBayes.new(training_file_name: 'admissions_data.csv').train_and_save('nb_config.csv')
-#end
+if __FILE__ == $0
+  #NaiveBayes.new(training_file_name: "nb_training_data.txt").train_and_save
+  NaiveBayes.new(config_file_name: "nb_config.csv") .rate_accuracy("nb_test_data.txt")
+end

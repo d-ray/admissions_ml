@@ -4,7 +4,7 @@ class Ann
 
   Max_Epochs = 10000
   Epochs_Between_Reports = 50
-  Default_Hidden_Neurons = [100,200,300,200,100]
+  Default_Hidden_Neurons = [400]
 
   # the path to the training data folder
   Training_Data_Folder = "training_data"
@@ -12,6 +12,8 @@ class Ann
   Test_Data_Folder = "test_data"
   # the path to the config file folder
   Config_Folder = "config"
+
+  ANN_Class_Values = {"no_admit" => "1 0 0", "admit_no_matriculate" => "0 1 0", "admit_matriculate" => "0 0 1"}
 
   def initialize(params = {})
     if params[:training_file_name]
@@ -30,7 +32,7 @@ class Ann
     @fann.train_on_data(data, Max_Epochs, Epochs_Between_Reports, desired_error)
   end
   
-  def train_and_save(desired_error = 0.01, config_file = "ann_config.txt")
+  def train_and_save(desired_error = 0.001, config_file = "ann_config.txt")
     train(desired_error)
     @fann.save("#{Config_Folder}/#{config_file}")
   end
@@ -52,27 +54,30 @@ class Ann
         end
       end
     end
-    
-    classification_counts = {}
+
+    confusion_matrix = {:_TOTAL => test_data.size}
     test_data.each do |instance|
-      class_value = instance.delete_at(instance.size - 1)
-      classification_counts[class_value] ||= {correct: 0, total: 0}
-      classification_counts[class_value][:total] += 1
-puts "@fann.run(instance.first): #{@fann.run(instance.first)}"
-      classification_counts[class_value][:correct] += 1 if (assign_class_value(@fann.run(instance.first)) == assign_class_value(instance.last)) #TODO: this is probably wrong
-    end
-    
-    total_correct = 0
-    classification_counts.values.each {|h| total_correct += h[:correct]}    
-    puts "Total: #{total_correct} out of #{test_data.size} (#{(total_correct.to_f / test_data.size)}%) correctly classified"
-    puts "By class value:"    
-    classification_counts.each {|kv_pair| puts "Value #{kv_pair.first}: #{kv_pair.last[:correct]} out of #{kv_pair.last[:total]} (#{kv_pair.last[:correct].to_f / kv_pair.last[:total]}%) correctly classified"}
+      class_representation = instance.delete_at(instance.size - 1).inject('') {|string,node| string << "#{node.to_i} "}.chomp(' ')
+      actual_class_value = ANN_Class_Values.key(class_representation)
+      predicted_class_value = ANN_Class_Values.key(assign_class_value(@fann.run(instance.first)))
+puts "predicted_class_value: #{predicted_class_value}"
+      confusion_matrix[actual_class_value] ||= {:_TOTAL => 0}
+      confusion_matrix[actual_class_value][:_TOTAL] += 1 
+      confusion_matrix[actual_class_value][predicted_class_value] ||= 0
+      confusion_matrix[actual_class_value][predicted_class_value] += 1 
+    end                                     
+    confusion_matrix
   end
 
   def assign_class_value(output)
+    class_value_string = "0 0 0"
     max = output.max
-    output.index(max)
+    class_value_string[2 * output.index(max)] = "1"
+    class_value_string
   end
 end
- #Ann.new(training_file_name: "ann_training_data.txt").train_and_save
- Ann.new(config_file_name: "ann_config.txt").rate_accuracy("ann_test_data.txt")
+
+if __FILE__ == $0
+  Ann.new(training_file_name: "ann_training_data.txt").train_and_save
+  #Ann.new(config_file_name: "ann_config.txt").rate_accuracy("ann_test_data.txt")
+end

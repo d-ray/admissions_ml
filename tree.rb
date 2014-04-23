@@ -81,19 +81,16 @@ class Tree
       end
     end
 
-    classification_counts = {}
+    confusion_matrix = {:_TOTAL => test_data.size}
     test_data.each do |instance|
-      class_value = instance.delete_at(instance.size - 1)
-      classification_counts[class_value] ||= {correct: 0, total: 0}
-      classification_counts[class_value][:total] += 1
-      classification_counts[class_value][:correct] += 1 if (@tree.predict(instance) == class_value)
+      actual_class_value = instance.delete_at(instance.size - 1)
+      predicted_class_value = @tree.predict(instance)
+      confusion_matrix[actual_class_value] ||= {:_TOTAL => 0}
+      confusion_matrix[actual_class_value][:_TOTAL] += 1
+      confusion_matrix[actual_class_value][predicted_class_value] ||= 0
+      confusion_matrix[actual_class_value][predicted_class_value] += 1
     end
-
-    total_correct = 0
-    classification_counts.values.each {|h| total_correct += h[:correct]}
-    puts "Total: #{total_correct} out of #{test_data.size} (#{(total_correct.to_f / test_data.size) * 100}%) correctly classified"
-    puts "By class value:"
-    classification_counts.each {|kv_pair| puts "Value #{kv_pair.first}: #{kv_pair.last[:correct]} out of #{kv_pair.last[:total]} (#{(kv_pair.last[:correct].to_f / kv_pair.last[:total]) * 100}%) correctly classified"}
+    confusion_matrix
   end
 
   def predict(instance)
@@ -114,9 +111,7 @@ class Tree
   end
 end
 
-tree = Tree.new(:config_file_name => "id3_config.txt")
-tree.rate_accuracy("id3_test_data.txt")
-tree.graph
-
-#tree = Tree.new(:training_file_name => "id3_training_data.txt")
-#tree.train_and_save
+if __FILE__ == $0
+  #Tree.new(:training_file_name => "id3_train_binary_decision.txt") .train_and_save("id3_binary_config.txt")
+  tree = Tree.new(:config_file_name => "id3_config.txt") .rate_accuracy("id3_test_data.txt")
+end
