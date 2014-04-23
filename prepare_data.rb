@@ -1,4 +1,5 @@
 require './zips.rb'
+require 'date'
 
 class PrepareData
 
@@ -10,6 +11,8 @@ class PrepareData
   Test_Data_Folder = "test_data"
   # the postal code of the school
   School_Postal_Code = "93108"
+
+  Default_Data_File = "admissions_data.csv"
 
   # ID3 specific values
   Default_Value = "no_admit"
@@ -34,38 +37,39 @@ class PrepareData
     [:gender, {type: :discrete, discrete_options: 2}],
     [:ethnicity, {type: :discrete, discrete_options: 10}],
     [:state, {type: :discrete, discrete_options: 60}],
-    [:postal_code, {type: :discrete, continuous_denominator: 12500, discretization: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
+    [:postal_code, {type: :continuous, continuous_denominator: 12500, discretization: Postal_Code_Discretization,  processing: lambda {|zip| process_postal_code(zip)}}],
     [:country, {type: :discrete, discrete_options: 196}],
     [:major1, {type: :discrete, discrete_options: 113}],
     [:major2, {type: :discrete, discrete_options: 113}],
     [:major3, {type: :discrete, discrete_options: 113}],
-    [:hs_CEEB_code, {type: :discrete, discrete_options: 0, continuous_denominator: 0}],
-    [:hs_GPA, {type: :continuous, discretization: GPA_Discretization, continuous_denominator: 5}],
-    [:grad_year, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
+    [:hs_CEEB_code, {type: :discrete, discrete_options: 0}],
+    [:hs_GPA, {type: :continuous, discretization: GPA_Discretization, continuous_denominator: 6, processing: lambda {|gpa| sanitize_gpa(gpa)}}],
+    [:grad_year, {type: :continuous, continuous_denominator: 50, processing: lambda {|grad_year, app_year| process_grad_year(grad_year, app_year)}, process_with_app_year: true}],
     [:ACT_score, {type: :discrete, continuous_denominator: 36}],
     [:SAT_score, {type: :continuous, discretization: SAT_Discretization, continuous_denominator: 1600}],
-    [:application_date, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
+    [:application_date, {type: :continuous, continuous_denominator: 365, processing: lambda {|app_date, app_year| process_date(app_date, app_year)}, process_with_app_year: true}],
     [:initial_visit_code, {type: :discrete, discrete_options: 6}],
-    [:initial_visit_date, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
+    [:initial_visit_date, {type: :continuous, continuous_denominator: 365, processing: lambda {|visit_date, app_year| process_date(visit_date, app_year)}, process_with_app_year: true}],
     [:initial_inquiry_code, {type: :discrete, discrete_options: 131}],
-    [:initial_inquiry_date, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
+    [:initial_inquiry_date, {type: :continuous, continuous_denominator: 365, processing: lambda {|inquiry_date, app_year| process_date(inquiry_date, app_year)}, process_with_app_year: true}],
     [:admit_date, {type: :unused, class_value: true}],
     [:enrollment_date, {type: :unused, class_value: true}],
     [:deposit_date, {type: :unused}],
     [:first_source_app, {type: :discrete, discrete_options: 2}],
-    [:entry_term, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
+    [:entry_term, {type: :discrete, discrete_options: 2, processing: lambda {|entry_term| process_entry_term(entry_term)}}],
     [:opportunity_type, {type: :discrete, discrete_options: 4}],
     [:application_status, {type: :unused}],
     [:scholarships, {type: :discrete, discrete_options: 9}],
     [:scholarships_bumped, {type: :discrete, discrete_options: 4, continuous_denominator: 0}],
     [:academic_index, {type: :continuous, discretization: Academic_Index_Discretization, continuous_denominator: 10000}],
-    [:academic_year, {type: :unused, discrete_options: 0, continuous_denominator: 0}],
+    [:academic_year, {type: :unused}],
     [:family_income, {type: :continuous, discretization: Family_Income_Discretization, continuous_denominator: 100000000}],
     [:family_contribution, {type: :continuous, discretization: Contribution_Discretization, continuous_denominator: 100000000}],
     [:total_gift_aid, {type: :continuous, discretization: Gift_Discretization, continuous_denominator: 100000}],
     [:admit_status, {type: :unused}]
   ]
 
+  # calculate the distance between the applicant's zip code and the school's zip code
   def self.process_postal_code(postal_code)
       @distance_calculator ||= Zips.new
     if @distance_calculator.data_for?(postal_code)
@@ -75,22 +79,45 @@ class PrepareData
     end
   end
 
+  # extract the entry semester (fall or spring) from entry term which also includes the year
+  def self.process_entry_term(entry_term)
+    entry_term.slice(3,2)
+  end
+
+  # calculate the number of the years between high school graduation and college application
+  def self.process_grad_year(grad_year, app_year)
+    (Date.new(app_year.to_i) - Date.new(grad_year.to_i)).to_i / 365
+  end
+
+  # calculate the number of days between the given date and the deadline
+  def self.process_date(date_string, app_year)
+    return '' if date_string.empty?
+    application_deadline = Date.new(app_year.to_i, 5, 1) # use May 1st as application deadline
+    month, day, year = date_string.split('/')
+    date = Date.new(year.to_i, month.to_i, day.to_i)
+    (application_deadline - date).to_i % 365 # adjust for the fact that app_year is apparently not always the application year the applicant is applying for
+  end
+
+  # remove GPAs that don't make sense (anything over 6.0)
+  def self.sanitize_gpa(gpa)
+    (gpa.to_f > 6) ? "" : gpa
+  end
+
   # initialized with a csv file containing data instances for training/testing
-  def initialize(binary_decision = false, partition_by_year = false, training_files = {}, test_files = {}, data_file = "admissions_data.csv")
+  def initialize(params = {})
+    @training_files = params[:training_files] || {}
+    @test_files = params[:test_files] || {}
     Classifiers.each do |classifier|
-      training_files[classifier] ||= "#{classifier.to_s}_training_data.txt"
-      test_files[classifier] ||= "#{classifier.to_s}_test_data.txt"
+      @training_files[classifier] ||= "#{classifier.to_s}_training_data.txt"
+      @test_files[classifier] ||= "#{classifier.to_s}_test_data.txt"
     end
-    @training_files = training_files
-    @test_files = test_files
 
     class_value_attribute_indices = {}
-    academic_year_index = nil
     Attributes.each_with_index  do |attribute, index|
       if attribute.last[:class_value]
         class_value_attribute_indices[attribute.first] = index 
       elsif attribute.first == :academic_year
-        academic_year_index = index
+        @academic_year_index = index
       end
     end 
 
@@ -100,27 +127,39 @@ class PrepareData
     # training and test sets are arrays of pairs consisting of an instance's attribute values and its class value
     @training_data = []
     @test_data = []
-    instances_by_year = {} if partition_by_year
+    instances_by_year = {} if params[:partition_by_year]
 
+    @discretize_nb = params[:discretize_nb] # set flag for whether continuous attributes should be discretized in naive bayes
+
+    data_file = params[:data_file] || Default_Data_File
     File.open(data_file) do |f|
       f.gets # ignore header
       f.each_line do |line|
         line.gsub!(/".*,.*"/) {|attribute| "\\#{attribute.gsub(',','')}"} #remove commas contained in matched quotes
         instance_array = line.chomp.split(',')
+        (Attributes.size - instance_array.size).times {instance_array << ""} #ensure the appropriate number of attributes in case trailing empty strings are dropped
+
         Attributes.each_with_index do |attribute, index|
           # perform any necessary processing of attributes
           if attribute.last[:processing]
-            instance_array[index] = attribute.last[:processing].call(instance_array[index])
+            if attribute.last[:process_with_app_year] # determines whether app_year should be passed as a second parameter to the processing function
+              if instance_array[index].empty? || instance_array[@academic_year_index].empty?
+                instance_array[index] = ""
+              else
+                instance_array[index] = attribute.last[:processing].call(instance_array[index],instance_array[@academic_year_index].slice(0,4))
+              end
+            else
+              instance_array[index] = attribute.last[:processing].call(instance_array[index])
+            end
           end
         end
 
         class_value_attributes = {}
         class_value_attribute_indices.each {|kv_pair| class_value_attributes[kv_pair.first] = instance_array[kv_pair.last]}
-        class_value = determine_class_value(class_value_attributes, binary_decision)
+        class_value = determine_class_value(class_value_attributes, params[:binary_decision])
 
-        (Attributes.size - instance_array.size).times {instance_array << ""} #ensure the appropriate number of attributes in case trailing empty strings are dropped
 
-        if partition_by_year
+        if params[:partition_by_year]
           instances_by_year[instance_array[academic_year_index].slice(0,4) ] ||= []
           instances_by_year[instance_array[academic_year_index].slice(0,4) ] << [instance_array, class_value]
         else
@@ -132,7 +171,7 @@ class PrepareData
         end
       end
     end
-    if partition_by_year
+    if params[:partition_by_year]
       max_year = instances_by_year.keys.max
       @test_data = instances_by_year[max_year]
 
@@ -221,7 +260,7 @@ class PrepareData
         instance.first.each_with_index do |attribute_value, index|
           if Attributes[index].last[:discrete_options]
             # discrete attribute
-            instance_data << "#{convert_discrete_attribute_to_ann_input(attribute_value, index)} "
+            instance_data << "#{convert_discrete_attribute_to_numeric_input(attribute_value, index)} "
           elsif Attributes[index].last[:continuous_denominator]
             # continuous attribute
             instance_data << "#{attribute_value.to_f / Attributes[index].last[:continuous_denominator]} "
@@ -256,7 +295,7 @@ class PrepareData
         instance.first.each_with_index do |attribute_value, index|
           if Attributes[index].last[:type] == :unused
             next
-          elsif Attributes[index].last[:discretization]
+          elsif @discretize_nb && Attributes[index].last[:discretization]
             instance_data << "#{discretize(attribute_value.to_s, Attributes[index].last[:discretization])},"
           else
             instance_data << "#{attribute_value},"
@@ -290,7 +329,7 @@ class PrepareData
     end
   end
 
-  def determine_class_value(attributes, binary_decision = false)
+  def determine_class_value(attributes, binary_decision)
     if attributes[:admit_date].empty?
       "no_admit"
     elsif attributes[:enrollment_date].empty?
@@ -307,7 +346,7 @@ class PrepareData
   end
 
   def convert_discrete_attribute_to_numeric_input(attribute, index)
-return "" if Attributes[index].last[:discrete_options] == 0 # TODO: remove this when all attributes are being used appropriately
+    return "" if Attributes[index].last[:discrete_options] == 0
     numeric_option = convert_attribute_to_numeric_option(attribute, index)
     
     attribute_array = Array.new(Attributes[index].last[:discrete_options], 0)
@@ -329,5 +368,7 @@ return "" if Attributes[index].last[:discrete_options] == 0 # TODO: remove this 
   end
 end
 
-PrepareData.new.prepare_data(:nb)
-#PrepareData.new(true, {ann: "ann_train_by_year.txt", id3: "id3_train_by_year.txt", nb: "nb_train_by_year.txt", svm: "svm_train_by_year.txt"}, {ann: "ann_test_by_year.txt", id3: "id3_test_by_year.txt", nb: "nb_test_by_year.txt", svm: "svm_test_by_year.txt"}).prepare_data(:all)
+if __FILE__ == $0
+  PrepareData.new(true, false, {svm: "svm_training_binary_decision.txt"}, {svm: "svm_test_binary_decision.txt"}).prepare_data(:svm)
+  #PrepareData.new(true, false, {ann: "ann_train_binary_decision.txt", id3: "id3_train_binary_decision.txt", nb: "nb_train_binary_decision.txt", svm: "svm_train_binary_decision.txt"}, {ann: "ann_test_binary_decision.txt", id3: "id3_test_binary_decision.txt", nb: "nb_test_binary_decision.txt", svm: "svm_test_binary_decision.txt"}).prepare_data(:all)
+end
