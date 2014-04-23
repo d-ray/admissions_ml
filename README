@@ -18,7 +18,7 @@ Milestone #1:
 
 Milestone #2:
 - implement naive_bayes
-- ensure that training results can be saved for all algorithms
+- ensure that training results can be saved for all algorithms (config files)
 - write separate file to train and test all algorithms
 
 Milestone #3:
@@ -30,11 +30,13 @@ Milestone #3:
 
 Milestone #4
 - calculate distances between zip codes
+- perform necessary processing to utilize all useful data attributes provided
 - allow the option of using two class values (accept or not) rather than three
 - make adjustments to each algorithm to gauge their highest level of performance
-- select one (most promising) algorithm and explore further improvements
 
 Wrap-up
+- confusion matrices to better understand error break down
+- select one most promising algorithm
 - finish improvements to selected algorithm
 - build interface to allow use by admissions staff
 - if feasible, implement any requested additional helpful features for admissions office
